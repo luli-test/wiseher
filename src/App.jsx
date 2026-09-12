@@ -14,6 +14,8 @@ import {
   saveTwinSnapshot,
   resetToDemo
 } from './services/storage';
+import { generateRelationshipTwin } from './services/gemini';
+import { Sparkles, Lock } from 'lucide-react';
 
 export default function App() {
   const [contacts, setContacts] = useState([]);
@@ -28,6 +30,7 @@ export default function App() {
 
   // Phone preview frame toggle for desktop demoing
   const [isPhonePreview, setIsPhonePreview] = useState(false);
+  const [isGeneratingTwin, setIsGeneratingTwin] = useState(false);
 
   // Initialize data on mount
   useEffect(() => {
@@ -56,45 +59,46 @@ export default function App() {
     setSelectedContactId(newContact.id);
   };
 
-  const handleSaveCheckIn = (newCheckIn) => {
+  const handleSaveCheckIn = async (newCheckIn) => {
+    // 1. Save check-in immediately to local store
     saveStoredCheckIn(newCheckIn);
-    
-    // For step 2 (static / local state), construct a local snapshot update
-    // In step 3, this will be enriched with Gemini API generation
-    const contactSnapshots = twinSnapshots[newCheckIn.contactId] || [];
-    const count = contactSnapshots.length + 1;
-    
-    // Determine stage based on rating or progression
-    let stage = 'budding';
-    if (newCheckIn.rating >= 4) stage = 'leafy';
-    if (newCheckIn.rating === 5 && count >= 3) stage = 'blooming';
-    if (newCheckIn.rating <= 2) stage = 'bare';
+    refreshData();
 
-    const localSnapshot = {
-      id: `twin-snap-${Date.now()}`,
-      contactId: newCheckIn.contactId,
-      checkInId: newCheckIn.id,
-      date: newCheckIn.date,
-      weekLabel: `Check-in ${count}`,
-      stage: stage,
-      headline: `Reflection after interaction`,
-      observations: [
-        `Summary of event: ${newCheckIn.whatHappened || 'Interaction logged'}. [Check-in: ${newCheckIn.date}]`,
-        `Standout moment: ${newCheckIn.standout || 'None noted'}. [Check-in: ${newCheckIn.date}]`,
-        `Communication dynamic: ${newCheckIn.communicationDynamics || 'Self-reported'}. [Check-in: ${newCheckIn.date}]`
-      ],
-      whatChanged: `Logged new reflection on ${newCheckIn.date} (Feeling rating: ${newCheckIn.rating}/5).`,
-      patterns: {
-        green: newCheckIn.rating >= 4 ? [`Positive engagement can be a sign of respect and mutual interest. [Check-in: ${newCheckIn.date}]`] : [],
-        yellow: newCheckIn.rating === 3 ? [`Uncertain feelings can be a sign to stay observant of ongoing consistency. [Check-in: ${newCheckIn.date}]`] : [],
-        red: newCheckIn.rating <= 2 ? [`Discomfort or confusion can be a sign to check personal boundaries. [Check-in: ${newCheckIn.date}]`] : []
-      },
-      reflectionQuestion: 'How does your body feel when you remember this interaction?',
-      nextStep: 'Give yourself time to process before deciding your next move.'
+    // 2. Identify contact & full check-in timeline
+    const targetContact = contacts.find((c) => c.id === newCheckIn.contactId) || {
+      id: newCheckIn.contactId,
+      nickname: 'Contact',
+      intent: 'dating'
     };
 
-    saveTwinSnapshot(newCheckIn.contactId, localSnapshot);
-    refreshData();
+    const allForContact = [...checkIns.filter((c) => c.contactId === newCheckIn.contactId), newCheckIn]
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const previousSnapshots = twinSnapshots[newCheckIn.contactId] || [];
+    const latestPrevSnapshot = previousSnapshots.length > 0 ? previousSnapshots[previousSnapshots.length - 1] : null;
+
+    setIsGeneratingTwin(true);
+
+    try {
+      // 3. AI synthesis with anonymization adapter
+      const generated = await generateRelationshipTwin(targetContact, allForContact, latestPrevSnapshot);
+      const newSnapshot = {
+        id: `twin-snap-${Date.now()}`,
+        contactId: newCheckIn.contactId,
+        checkInId: newCheckIn.id,
+        date: newCheckIn.date,
+        weekLabel: `Check-in ${previousSnapshots.length + 1}`,
+        ...generated
+      };
+
+      saveTwinSnapshot(newCheckIn.contactId, newSnapshot);
+      refreshData();
+      setSelectedContactId(newCheckIn.contactId);
+    } catch (err) {
+      console.error('Failed to generate relationship twin snapshot:', err);
+    } finally {
+      setIsGeneratingTwin(false);
+    }
   };
 
   const selectedContact = contacts.find((c) => c.id === selectedContactId) || null;
@@ -170,6 +174,27 @@ export default function App() {
         selectedContact={checkInContact}
         onSaveCheckIn={handleSaveCheckIn}
       />
+
+      {/* AI Generating Twin Overlay */}
+      {isGeneratingTwin && (
+        <div className="fixed inset-0 z-50 bg-sand-900/30 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-sand-200 rounded-3xl p-6 shadow-2xl flex flex-col items-center gap-3 max-w-xs text-center animate-fadeIn">
+            <div className="p-3 bg-terracotta-50 rounded-2xl text-terracotta-600 animate-spin">
+              <Sparkles className="w-6 h-6" />
+            </div>
+            <h4 className="font-serif font-bold text-sm text-sand-900">
+              Updating Relationship Twin
+            </h4>
+            <p className="text-xs text-sand-500">
+              Synthesizing check-in history into living observations & patterns...
+            </p>
+            <div className="inline-flex items-center gap-1 text-[11px] font-medium text-sage-700 bg-sage-50 px-2.5 py-0.5 rounded-full border border-sage-200">
+              <Lock className="w-3 h-3 text-sage-600" />
+              <span>Anonymized before AI</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
