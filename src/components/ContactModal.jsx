@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Heart, Users, HelpCircle, Shield, Sparkles } from 'lucide-react';
+import LeafSprig from './LeafSprig';
 import { INTENTS } from '../constants';
 
 /**
@@ -45,7 +46,7 @@ export default function ContactModal({ isOpen, onClose, onSave }) {
         </button>
 
         <div className="space-y-1 mb-5">
-          <span className="text-xl">🌱</span>
+          <LeafSprig size={24} />
           <h3 className="font-serif font-bold text-lg text-sand-900">
             Plant a New Tree
           </h3>

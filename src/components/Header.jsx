@@ -1,6 +1,8 @@
 import React from 'react';
 import { RotateCcw, Smartphone, Monitor, Plus, HeartHandshake } from 'lucide-react';
 
+import LeafSprig from './LeafSprig';
+
 /**
  * Header: Brand header with tagline and key controls
  */
@@ -16,7 +18,7 @@ export default function Header({
         {/* Brand */}
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-xl">🌿</span>
+            <LeafSprig size={24} className="hover:rotate-6 transition-transform duration-300" />
             <h1 className="text-xl font-serif font-bold text-sand-900 tracking-tight">
               WiseHer
             </h1>

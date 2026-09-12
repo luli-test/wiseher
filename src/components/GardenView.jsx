@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, Sparkles, ChevronRight, Calendar, Info } from 'lucide-react';
 import TreeVisualizer from './TreeVisualizer';
+import LeafSprig from './LeafSprig';
 import { INTENTS, getStreakInfo, TREE_STAGES } from '../constants';
 
 /**
@@ -39,8 +40,8 @@ export default function GardenView({
       {/* Cards List / Grid */}
       {contacts.length === 0 ? (
         <div className="bg-white border border-sand-200 rounded-3xl p-10 text-center space-y-3">
-          <div className="w-16 h-16 rounded-full bg-sand-100 flex items-center justify-center mx-auto text-2xl">
-            🌱
+          <div className="w-16 h-16 rounded-full bg-sand-100 flex items-center justify-center mx-auto">
+            <LeafSprig size={36} />
           </div>
           <h3 className="font-serif font-semibold text-sand-800">Your garden is empty</h3>
           <p className="text-xs text-sand-500 max-w-xs mx-auto">

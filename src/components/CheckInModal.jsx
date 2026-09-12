@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Mic, MicOff, Star, Lock, Calendar, MessageSquare, Heart, ShieldAlert, Sparkles } from 'lucide-react';
+import LeafSprig from './LeafSprig';
 import { isSpeechRecognitionSupported, createSpeechRecognizer } from '../services/speech';
 
 /**
@@ -135,7 +136,7 @@ export default function CheckInModal({
         {/* Modal Header */}
         <div className="space-y-1 mb-5">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🌿</span>
+            <LeafSprig size={22} />
             <h3 className="font-serif font-bold text-lg text-sand-900">
               Guided Check-In
             </h3>
