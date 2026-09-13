@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Plus, Calendar, Clock, Sparkles, History, ChevronRight, Lock } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar, Clock, Sparkles, History, ChevronRight, Lock, RefreshCw } from 'lucide-react';
 import TreeVisualizer from './TreeVisualizer';
 import PatternCheck from './PatternCheck';
 import SafetyBanner from './SafetyBanner';
@@ -16,7 +16,9 @@ export default function RelationshipTwin({
   checkIns = [],
   twinSnapshots = [],
   onBack,
-  onOpenNewCheckIn
+  onOpenNewCheckIn,
+  onRegenerate,
+  isRegenerating = false
 }) {
   const intentInfo = INTENTS[contact.intent] || INTENTS.dating;
   const streak = useMemo(() => getStreakInfo(checkIns), [checkIns]);
@@ -202,15 +204,43 @@ export default function RelationshipTwin({
 
           {/* LIVING TWIN OBSERVATIONS CARD */}
           <div className="bg-white border border-sand-200/90 rounded-2xl p-4 shadow-sm space-y-4">
-            {/* Snapshot headline */}
-            <div className="border-b border-sand-100 pb-3">
-              <span className="text-[11px] uppercase tracking-wider text-sand-400 font-medium">
-                Living Profile Snapshot • {currentSnapshot.date}
-              </span>
-              <h3 className="text-base font-serif font-bold text-sand-900 mt-0.5">
-                {currentSnapshot.headline}
-              </h3>
+            {/* Snapshot headline & Regenerate button */}
+            <div className="border-b border-sand-100 pb-3 flex items-start justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-wider text-sand-400 font-medium">
+                    Living Profile Snapshot • {currentSnapshot.date}
+                  </span>
+                  {currentSnapshot.isAIGenerated && (
+                    <span className="text-[10px] bg-sage-50 text-sage-700 border border-sage-200 px-1.5 py-0.2 rounded font-medium">
+                      Gemini Flash
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-base font-serif font-bold text-sand-900 mt-0.5">
+                  {currentSnapshot.headline}
+                </h3>
+              </div>
+
+              {onRegenerate && (
+                <button
+                  onClick={() => onRegenerate(contact)}
+                  disabled={isRegenerating || checkIns.length === 0}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-terracotta-700 bg-terracotta-50 hover:bg-terracotta-100 border border-terracotta-200 px-2.5 py-1.5 rounded-xl transition disabled:opacity-50 shrink-0"
+                  title="Regenerate Relationship Twin using Gemini AI"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+                  <span>{isRegenerating ? 'Analyzing...' : 'Regenerate'}</span>
+                </button>
+              )}
             </div>
+
+            {/* Error notice if fallback occurred */}
+            {currentSnapshot.apiError && (
+              <div className="bg-sand-100 text-sand-700 text-xs px-3 py-2 rounded-xl border border-sand-200">
+                {currentSnapshot.apiError}
+              </div>
+            )}
 
             {/* What Changed Line */}
             {currentSnapshot.whatChanged && (

@@ -7,7 +7,45 @@ import { anonymize, deanonymize } from './anonymizer';
 import { evaluateSafety } from './safety';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_MODEL = 'gemini-3.6-flash';
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+// Strict JSON schema matching the specifications
+const RELATIONSHIP_TWIN_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    tree_stage: {
+      type: "STRING",
+      enum: ["bare", "budding", "leafy", "blooming", "flourishing"]
+    },
+    headline: { type: "STRING" },
+    observations: {
+      type: "ARRAY",
+      items: { type: "STRING" }
+    },
+    what_changed: { type: "STRING" },
+    patterns: {
+      type: "OBJECT",
+      properties: {
+        green: { type: "ARRAY", items: { type: "STRING" } },
+        yellow: { type: "ARRAY", items: { type: "STRING" } },
+        red: { type: "ARRAY", items: { type: "STRING" } }
+      },
+      required: ["green", "yellow", "red"]
+    },
+    reflection_question: { type: "STRING" },
+    next_step: { type: "STRING" }
+  },
+  required: [
+    "tree_stage",
+    "headline",
+    "observations",
+    "what_changed",
+    "patterns",
+    "reflection_question",
+    "next_step"
+  ]
+};
 
 /**
  * Generate a living Relationship Twin snapshot from all check-ins for a contact
@@ -22,113 +60,148 @@ export async function generateRelationshipTwin(contact, allCheckIns, previousSna
   if (safetyCheck.isTriggered) {
     return {
       stage: 'bare',
+      tree_stage: 'bare',
       headline: 'Safety Protection Active',
       observations: ['Safety concerns detected in recent check-ins.'],
       whatChanged: 'Pattern analysis is paused due to safety flags.',
+      what_changed: 'Pattern analysis is paused due to safety flags.',
       patterns: { green: [], yellow: [], red: [] },
       reflectionQuestion: 'How can you best protect your safety and peace right now?',
+      reflection_question: 'How can you best protect your safety and peace right now?',
       nextStep: 'Please reach out to the 116 016 helpline or a trusted professional.',
+      next_step: 'Please reach out to the 116 016 helpline or a trusted professional.',
       isSafetyTriggered: true,
       safetyCheck
     };
   }
 
-  // Prepare input text for anonymization
+  // Format all check-in history chronologically
   const formattedHistory = allCheckIns.map((c, index) => {
     return `[Check-in ${index + 1}: ${c.date}]
 - What happened: ${c.whatHappened}
 - Feeling & Rating: ${c.feeling} (Rating: ${c.rating}/5)
-- Standout moment: ${c.standout}
-- Communication & Tone: ${c.communicationDynamics}`;
+- Standout moment: ${c.standout || 'None noted'}
+- Communication & Tone: ${c.communicationDynamics || 'None noted'}`;
   }).join('\n\n');
 
   const rawPromptContent = `
-Contact Intent: ${contact.intent}
-Relationship History:
+Contact Nickname: ${contact.nickname}
+My Intent with this person: ${contact.intent}
+Full Relationship History (all check-ins so far):
 ${formattedHistory}
 
-Previous State:
-${previousSnapshot ? `Headline: ${previousSnapshot.headline}\nObservations: ${previousSnapshot.observations.join('; ')}` : 'None (First check-in)'}
+Previous Living Twin State:
+${previousSnapshot ? `Headline: ${previousSnapshot.headline}\nObservations: ${(previousSnapshot.observations || []).join('; ')}` : 'None (This is the baseline check-in)'}
 `;
 
-  // 1. ANONYMIZE BEFORE AI
+  // 1. PRIVACY ANONYMIZATION BEFORE AI
   const { text: anonymizedContent, mapping } = await anonymize(rawPromptContent, [contact.nickname]);
 
-  // If Gemini API Key is available, call the Gemini API
+  // If Gemini API Key is available, call the Gemini API with retry logic
   if (GEMINI_API_KEY && GEMINI_API_KEY.trim() !== '') {
-    try {
-      const response = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: `You are WiseHer, an empathetic relationship reflection coach for women.
+    let lastError = null;
+
+    // Up to 2 attempts (one retry on invalid JSON or network failure)
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: `You are WiseHer, an empathetic, empowering relationship reflection coach for women.
 Tagline: "Know your patterns, trust your perception."
-Goal: Synthesize all check-ins into a living "Relationship Twin" profile and detect communication patterns.
+Goal: Synthesize all check-ins into a living "Relationship Twin" profile and detect communication patterns without self-gaslighting.
 
-RULES:
-1. Ground every observation in the check-ins and quote or link to the specific check-in date (e.g. "[Check-in: DATE]"). Provide 3-5 observations.
-2. Provide a "what changed since last time" line comparing to the previous interaction.
-3. Categorize communication patterns into:
-   - green: healthy, respectful, mutual signals
-   - yellow: potential mixed signals, ambivalence, pace mismatch
-   - red: unreliability, emotional withdrawal, boundary crossing, deflection
-4. CRITICAL: Every pattern MUST be phrased strictly as "can be a sign of", NEVER as a verdict or diagnosis (e.g. "Cancelling plans last minute can be a sign of fluctuating priority", NOT "He is inconsiderate").
-5. Suggest one empowering reflection question that fosters self-trust (never self-blame).
-6. Suggest one calm next step aligned with the user's intent: ${contact.intent}.
-7. Determine the tree health stage: "bare" (tension, unreliability, distress), "budding" (new, tender, exploration), "leafy" (steady, consistent, balanced), "blooming" (warm, mutual, respectful), or "flourishing" (exceptional deep mutual care, joy, safety).
+STRICT COACHING RULES:
+1. observations: 3-5 short, concrete observations grounded in what happened. Each MUST explicitly cite its check-in date (e.g. "[Check-in: 2026-09-12]").
+2. what_changed: Exactly one concise line summarizing what shifted since the previous check-in.
+3. patterns: Categorize communication patterns into green, yellow, and red.
+   - green: Mutual respect, consistency, vulnerability, reliable actions.
+   - yellow: Ambivalence, mixed signals, pace mismatch, or fluctuating priority.
+   - red: Deflection, gaslighting, emotional withdrawal, disrespect, or repeated broken agreements.
+   - MANDATORY PHRASING: Every single pattern MUST quote the check-in it is based on AND be phrased strictly as "can be a sign of", NEVER as a clinical diagnosis or definitive verdict (e.g., 'Cancelling last-minute ("...") can be a sign of inconsistent availability', NOT 'He is unreliable').
+4. reflection_question: One empowering coaching question that helps her connect to her intuition, bodily feelings, and self-trust (never self-blame).
+5. next_step: One calm, actionable next step that directly aligns with her intent: "${contact.intent}".
+6. tree_stage: Choose one of:
+   - "bare": strained connection, boundary violations, discomfort
+   - "budding": early exploration, tender new beginnings
+   - "leafy": steady consistency, balanced communication
+   - "blooming": deep warmth, mutual romantic or friendship enthusiasm
+   - "flourishing": exceptional mutual care, joy, safety, blossoming with harmony
 
-Respond strictly with valid JSON conforming to this structure:
-{
-  "stage": "bare" | "budding" | "leafy" | "blooming" | "flourishing",
-  "headline": "Short title describing current relationship state",
-  "observations": ["observation 1 [Check-in: DATE]", "observation 2 [Check-in: DATE]", "observation 3 [Check-in: DATE]"],
-  "whatChanged": "Summary of what shifted since the previous check-in",
-  "patterns": {
-    "green": ["... can be a sign of ... [Check-in: DATE]"],
-    "yellow": ["... can be a sign of ... [Check-in: DATE]"],
-    "red": ["... can be a sign of ... [Check-in: DATE]"]
-  },
-  "reflectionQuestion": "Empowering reflection question...",
-  "nextStep": "Constructive next step aligned with intent..."
-}
-
-Input data to analyze:
-${anonymizedContent}
-`
-                }
-              ]
+Input check-in history to analyze:
+${anonymizedContent}`
+                  }
+                ]
+              }
+            ],
+            generationConfig: {
+              responseMimeType: "application/json",
+              responseSchema: RELATIONSHIP_TWIN_SCHEMA,
+              temperature: 0.2
             }
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            temperature: 0.3
-          }
-        })
-      });
+          })
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        const candidate = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (candidate) {
-          const parsed = JSON.parse(candidate);
-          // 2. DE-ANONYMIZE BEFORE DISPLAY
-          return deanonymizeSnapshot(parsed, mapping);
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(`Gemini API returned status ${response.status}: ${errData.error?.message || response.statusText}`);
         }
-      } else {
-        console.warn('Gemini API call returned non-OK status:', response.status);
+
+        const data = await response.json();
+        const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!candidateText) {
+          throw new Error('No candidate content received from Gemini API');
+        }
+
+        const parsed = JSON.parse(candidateText);
+
+        // Standardize output shape
+        const standardized = {
+          stage: parsed.tree_stage || parsed.stage || 'budding',
+          tree_stage: parsed.tree_stage || parsed.stage || 'budding',
+          headline: parsed.headline || 'Relationship Reflection',
+          observations: Array.isArray(parsed.observations) ? parsed.observations : [],
+          whatChanged: parsed.what_changed || parsed.whatChanged || 'Interaction logged.',
+          what_changed: parsed.what_changed || parsed.whatChanged || 'Interaction logged.',
+          patterns: {
+            green: Array.isArray(parsed.patterns?.green) ? parsed.patterns.green : [],
+            yellow: Array.isArray(parsed.patterns?.yellow) ? parsed.patterns.yellow : [],
+            red: Array.isArray(parsed.patterns?.red) ? parsed.patterns.red : []
+          },
+          reflectionQuestion: parsed.reflection_question || parsed.reflectionQuestion || '',
+          reflection_question: parsed.reflection_question || parsed.reflectionQuestion || '',
+          nextStep: parsed.next_step || parsed.nextStep || '',
+          next_step: parsed.next_step || parsed.nextStep || '',
+          isAIGenerated: true,
+          generatedAt: new Date().toISOString()
+        };
+
+        // 2. PRIVACY DE-ANONYMIZATION BEFORE DISPLAY
+        return deanonymizeSnapshot(standardized, mapping);
+      } catch (err) {
+        lastError = err;
+        console.warn(`Gemini generation attempt ${attempt} failed:`, err.message);
+        if (attempt < 2) {
+          // Brief backoff before retry
+          await new Promise(r => setTimeout(r, 600));
+        }
       }
-    } catch (err) {
-      console.error('Failed to fetch from Gemini API, using client-side fallback:', err);
     }
+
+    console.error('All Gemini API attempts failed. Falling back gracefully to local engine:', lastError);
   }
 
-  // Fallback: Client-side intelligent reflection generator (works without API key)
-  return generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mapping);
+  // Fallback: Client-side intelligent reflection generator (works without API key or when offline)
+  const fallback = generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mapping);
+  fallback.apiError = 'Gemini API was temporarily unreachable. Showing local grounded reflection.';
+  return fallback;
 }
 
 /**
@@ -139,6 +212,7 @@ function deanonymizeSnapshot(snapshot, mapping) {
     ...snapshot,
     headline: deanonymize(snapshot.headline, mapping),
     whatChanged: deanonymize(snapshot.whatChanged, mapping),
+    what_changed: deanonymize(snapshot.what_changed, mapping),
     observations: (snapshot.observations || []).map(obs => deanonymize(obs, mapping)),
     patterns: {
       green: (snapshot.patterns?.green || []).map(p => deanonymize(p, mapping)),
@@ -146,7 +220,9 @@ function deanonymizeSnapshot(snapshot, mapping) {
       red: (snapshot.patterns?.red || []).map(p => deanonymize(p, mapping))
     },
     reflectionQuestion: deanonymize(snapshot.reflectionQuestion, mapping),
-    nextStep: deanonymize(snapshot.nextStep, mapping)
+    reflection_question: deanonymize(snapshot.reflection_question, mapping),
+    nextStep: deanonymize(snapshot.nextStep, mapping),
+    next_step: deanonymize(snapshot.next_step, mapping)
   };
 }
 
@@ -169,13 +245,13 @@ function generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mappi
   }
 
   const observations = [
-    `Event on ${latest.date}: ${latest.whatHappened.slice(0, 80)}... [Check-in: ${latest.date}]`,
-    `Self-reported feelings: ${latest.feeling} (Rating: ${latest.rating}/5). [Check-in: ${latest.date}]`,
-    `Noticed communication: ${latest.communicationDynamics}. [Check-in: ${latest.date}]`
+    `[Check-in: ${latest.date}] ${latest.whatHappened.slice(0, 80)}`,
+    `[Check-in: ${latest.date}] Self-reported feelings: ${latest.feeling} (Rating: ${latest.rating}/5)`,
+    `[Check-in: ${latest.date}] Communication noted: ${latest.communicationDynamics}`
   ];
 
   if (latest.standout) {
-    observations.push(`Standout moment noted: "${latest.standout}". [Check-in: ${latest.date}]`);
+    observations.push(`[Check-in: ${latest.date}] Standout moment: "${latest.standout}"`);
   }
 
   const greenPatterns = [];
@@ -183,11 +259,11 @@ function generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mappi
   const redPatterns = [];
 
   if (latest.rating >= 4) {
-    greenPatterns.push(`Attentive, reciprocal communication can be a sign of mutual respect and genuine emotional safety. [Check-in: ${latest.date}]`);
+    greenPatterns.push(`Reciprocal, warm communication ("${latest.communicationDynamics}") can be a sign of genuine mutual respect. [Check-in: ${latest.date}]`);
   } else if (latest.rating === 3) {
-    yellowPatterns.push(`Mixed emotional clarity after connecting can be a sign of differing communication expectations or pacing. [Check-in: ${latest.date}]`);
+    yellowPatterns.push(`Mixed emotional clarity after interacting can be a sign of differing paces or expectations. [Check-in: ${latest.date}]`);
   } else {
-    redPatterns.push(`Feeling drained or confused following communication can be a sign of inconsistency or boundary strain. [Check-in: ${latest.date}]`);
+    redPatterns.push(`Feeling drained or invalidated following interaction can be a sign of boundary strain or unreliability. [Check-in: ${latest.date}]`);
   }
 
   const headline = latest.rating >= 4
@@ -201,7 +277,7 @@ function generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mappi
     : `Initial baseline established with first check-in on ${latest.date}.`;
 
   const reflectionQuestion = latest.rating <= 2
-    ? 'Notice how your body felt during this interaction. What is your perception trying to tell you?'
+    ? 'Notice how your body felt during this interaction. What is your intuition telling you?'
     : 'How does this person\'s consistency match what you truly desire for this connection?';
 
   const nextStep = contact.intent === 'dating'
@@ -210,12 +286,18 @@ function generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mappi
 
   const rawSnapshot = {
     stage,
+    tree_stage: stage,
     headline,
     observations,
     whatChanged,
+    what_changed: whatChanged,
     patterns: { green: greenPatterns, yellow: yellowPatterns, red: redPatterns },
     reflectionQuestion,
-    nextStep
+    reflection_question: reflectionQuestion,
+    nextStep,
+    next_step: nextStep,
+    isAIGenerated: false,
+    generatedAt: new Date().toISOString()
   };
 
   return deanonymizeSnapshot(rawSnapshot, mapping);

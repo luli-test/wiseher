@@ -101,6 +101,41 @@ export default function App() {
     }
   };
 
+  const handleRegenerateTwin = async (targetContact) => {
+    const contactCheckIns = checkIns
+      .filter((c) => c.contactId === targetContact.id)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (contactCheckIns.length === 0) {
+      alert('Add at least one check-in first to analyze patterns.');
+      return;
+    }
+
+    setIsGeneratingTwin(true);
+    try {
+      const existingSnapshots = twinSnapshots[targetContact.id] || [];
+      const prevSnapshot = existingSnapshots.length > 1 ? existingSnapshots[existingSnapshots.length - 2] : null;
+      const generated = await generateRelationshipTwin(targetContact, contactCheckIns, prevSnapshot);
+
+      const latestCheckIn = contactCheckIns[contactCheckIns.length - 1];
+      const newSnapshot = {
+        id: `twin-snap-${Date.now()}`,
+        contactId: targetContact.id,
+        checkInId: latestCheckIn?.id || '',
+        date: latestCheckIn?.date || new Date().toISOString().split('T')[0],
+        weekLabel: `Reflection (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`,
+        ...generated
+      };
+
+      saveTwinSnapshot(targetContact.id, newSnapshot);
+      refreshData();
+    } catch (err) {
+      console.error('Failed to regenerate twin:', err);
+    } finally {
+      setIsGeneratingTwin(false);
+    }
+  };
+
   const selectedContact = contacts.find((c) => c.id === selectedContactId) || null;
   const activeContactCheckIns = selectedContact
     ? checkIns.filter((c) => c.contactId === selectedContact.id)
@@ -139,6 +174,8 @@ export default function App() {
                 setCheckInContact(selectedContact);
                 setIsCheckInModalOpen(true);
               }}
+              onRegenerate={handleRegenerateTwin}
+              isRegenerating={isGeneratingTwin}
             />
           ) : (
             <GardenView
