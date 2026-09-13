@@ -6,7 +6,13 @@
 import { anonymize, deanonymize } from './anonymizer';
 import { evaluateSafety } from './safety';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const getApiKey = () => {
+  if (typeof window !== 'undefined' && localStorage.getItem('wiseher_gemini_key')) {
+    return localStorage.getItem('wiseher_gemini_key');
+  }
+  return import.meta.env.VITE_GEMINI_API_KEY || '';
+};
+
 const GEMINI_MODEL = 'gemini-3.6-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
@@ -98,13 +104,14 @@ ${previousSnapshot ? `Headline: ${previousSnapshot.headline}\nObservations: ${(p
   const { text: anonymizedContent, mapping } = await anonymize(rawPromptContent, [contact.nickname]);
 
   // If Gemini API Key is available, call the Gemini API with retry logic
-  if (GEMINI_API_KEY && GEMINI_API_KEY.trim() !== '') {
+  const apiKey = getApiKey();
+  if (apiKey && apiKey.trim() !== '') {
     let lastError = null;
 
     // Up to 2 attempts (one retry on invalid JSON or network failure)
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const response = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -5,6 +5,12 @@ WiseHer is a single-page, privacy-first web application designed as a relationsh
 
 ---
 
+## 🌐 Live Demo & Deployment
+- **Live URL**: [https://luli-test.github.io/wiseher/](https://luli-test.github.io/wiseher/)
+- **Hosting**: Deployed via GitHub Pages (SPA static routing with universal base path; fallback from GCP project `aiwomen26ham-4435` Firebase Hosting due to 403 caller permissions).
+
+---
+
 ## Table of Contents
 1. [What WiseHer Does](#what-wiseher-does)
 2. [Key Features & Flow](#key-features--flow)
