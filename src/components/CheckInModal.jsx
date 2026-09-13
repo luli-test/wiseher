@@ -18,6 +18,7 @@ export default function CheckInModal({
   onClose,
   contacts = [],
   selectedContact = null,
+  initialCheckIn = null,
   onSaveCheckIn
 }) {
   const [contactId, setContactId] = useState('');
@@ -34,12 +35,28 @@ export default function CheckInModal({
   const speechSupported = isSpeechRecognitionSupported();
 
   useEffect(() => {
-    if (selectedContact) {
-      setContactId(selectedContact.id);
-    } else if (contacts.length > 0 && !contactId) {
-      setContactId(contacts[0].id);
+    if (initialCheckIn) {
+      setContactId(initialCheckIn.contactId || (selectedContact ? selectedContact.id : ''));
+      setDate(initialCheckIn.date || new Date().toISOString().split('T')[0]);
+      setWhatHappened(initialCheckIn.whatHappened || '');
+      setFeeling(initialCheckIn.feeling || '');
+      setRating(initialCheckIn.rating || 3);
+      setStandout(initialCheckIn.standout || '');
+      setCommunicationDynamics(initialCheckIn.communicationDynamics || '');
+    } else {
+      if (selectedContact) {
+        setContactId(selectedContact.id);
+      } else if (contacts.length > 0 && !contactId) {
+        setContactId(contacts[0].id);
+      }
+      setDate(new Date().toISOString().split('T')[0]);
+      setWhatHappened('');
+      setFeeling('');
+      setRating(3);
+      setStandout('');
+      setCommunicationDynamics('');
     }
-  }, [selectedContact, contacts]);
+  }, [isOpen, initialCheckIn, selectedContact, contacts]);
 
   // Clean up speech recognition on unmount or field change
   useEffect(() => {
@@ -96,9 +113,9 @@ export default function CheckInModal({
     e.preventDefault();
     if (!contactId) return;
 
-    // Build new check-in object
-    const newCheckIn = {
-      id: `checkin-${Date.now()}`,
+    // Build check-in object (retaining original id if editing)
+    const checkInData = {
+      id: initialCheckIn ? initialCheckIn.id : `checkin-${Date.now()}`,
       contactId,
       date,
       whatHappened: whatHappened.trim(),
@@ -106,10 +123,11 @@ export default function CheckInModal({
       rating: Number(rating),
       standout: standout.trim(),
       communicationDynamics: communicationDynamics.trim(),
-      createdAt: new Date().toISOString()
+      createdAt: initialCheckIn?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
-    onSaveCheckIn(newCheckIn);
+    onSaveCheckIn(checkInData, Boolean(initialCheckIn));
 
     // Reset fields
     setWhatHappened('');
@@ -138,11 +156,13 @@ export default function CheckInModal({
           <div className="flex items-center gap-2">
             <LeafSprig size={22} />
             <h3 className="font-serif font-bold text-lg text-sand-900">
-              Guided Check-In
+              {initialCheckIn ? 'Edit Guided Check-In' : 'Guided Check-In'}
             </h3>
           </div>
           <p className="text-xs text-sand-500">
-            Pause, reflect, and document what you noticed. Voice is transcribed to text only; no audio is saved.
+            {initialCheckIn
+              ? 'Update your notes from this interaction. The Relationship Twin will be regenerated.'
+              : 'Pause, reflect, and document what you noticed. Voice is transcribed to text only; no audio is saved.'}
           </p>
           <div className="pt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 text-[11px] font-medium text-sage-700 bg-sage-50 px-2.5 py-0.5 rounded-full border border-sage-200">
@@ -337,7 +357,7 @@ export default function CheckInModal({
               className="flex-2 py-2.5 px-4 rounded-xl bg-terracotta-600 hover:bg-terracotta-700 text-white text-xs font-medium transition shadow-sm active:scale-98 flex items-center justify-center gap-1.5"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Save & Update Twin</span>
+              <span>{initialCheckIn ? 'Save Changes & Update Twin' : 'Save & Update Twin'}</span>
             </button>
           </div>
         </form>

@@ -6,18 +6,21 @@ import ContactModal from './components/ContactModal';
 import CheckInModal from './components/CheckInModal';
 import GardenCoachView from './components/GardenCoachView';
 import DateSafetyCheck from './components/DateSafetyCheck';
+import SettingsModal from './components/SettingsModal';
 import {
   initializeStorage,
   getStoredContacts,
   saveStoredContacts,
   getStoredCheckIns,
   saveStoredCheckIn,
+  updateStoredCheckIn,
+  deleteStoredCheckIn,
   getStoredTwins,
   saveTwinSnapshot,
   resetToDemo
 } from './services/storage';
 import { generateRelationshipTwin } from './services/gemini';
-import { Sparkles, Lock, Trees, Shield, Compass } from 'lucide-react';
+import { Sparkles, Lock, Trees, Shield, Compass, AlertCircle, Wrench, RefreshCw, X, Key } from 'lucide-react';
 import LeafSprig from './components/LeafSprig';
 
 export default function App() {
@@ -30,7 +33,12 @@ export default function App() {
   // Modals
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isCheckInModalOpen, setIsCheckInModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [checkInContact, setCheckInContact] = useState(null);
+  const [editingCheckIn, setEditingCheckIn] = useState(null);
+
+  // Error & Fallback Confirmation State
+  const [generationError, setGenerationError] = useState(null);
 
   // Phone preview frame toggle for desktop demoing
   const [isPhonePreview, setIsPhonePreview] = useState(false);
@@ -63,46 +71,62 @@ export default function App() {
     setSelectedContactId(newContact.id);
   };
 
-  const handleSaveCheckIn = async (newCheckIn) => {
-    // 1. Save check-in immediately to local store
-    saveStoredCheckIn(newCheckIn);
+  const triggerTwinGeneration = async (targetContact, allForContact, latestPrevSnapshot, options = {}) => {
+    setIsGeneratingTwin(true);
+    setGenerationError(null);
+
+    try {
+      const generated = await generateRelationshipTwin(targetContact, allForContact, latestPrevSnapshot, options);
+      const newSnapshot = {
+        id: `twin-snap-${Date.now()}`,
+        contactId: targetContact.id,
+        checkInId: allForContact[allForContact.length - 1]?.id || '',
+        date: allForContact[allForContact.length - 1]?.date || new Date().toISOString().split('T')[0],
+        weekLabel: `Check-in ${allForContact.length}`,
+        ...generated
+      };
+
+      saveTwinSnapshot(targetContact.id, newSnapshot);
+      refreshData();
+      setSelectedContactId(targetContact.id);
+    } catch (err) {
+      console.warn('Relationship twin generation failed:', err);
+      setGenerationError({
+        message: err.message || 'Gemini API call failed.',
+        targetContact,
+        allForContact,
+        latestPrevSnapshot
+      });
+    } finally {
+      setIsGeneratingTwin(false);
+    }
+  };
+
+  const handleSaveCheckIn = async (checkInData, isEdit = false) => {
+    if (isEdit) {
+      updateStoredCheckIn(checkInData);
+    } else {
+      saveStoredCheckIn(checkInData);
+    }
     refreshData();
 
-    // 2. Identify contact & full check-in timeline
-    const targetContact = contacts.find((c) => c.id === newCheckIn.contactId) || {
-      id: newCheckIn.contactId,
+    // Identify contact & full check-in timeline
+    const targetContact = contacts.find((c) => c.id === checkInData.contactId) || {
+      id: checkInData.contactId,
       nickname: 'Contact',
       intent: 'dating'
     };
 
-    const allForContact = [...checkIns.filter((c) => c.contactId === newCheckIn.contactId), newCheckIn]
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    const currentCheckIns = isEdit
+      ? getStoredCheckIns().filter(c => c.contactId === checkInData.contactId)
+      : [...checkIns.filter((c) => c.contactId === checkInData.contactId), checkInData];
 
-    const previousSnapshots = twinSnapshots[newCheckIn.contactId] || [];
+    const sortedAll = [...currentCheckIns].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const previousSnapshots = twinSnapshots[checkInData.contactId] || [];
     const latestPrevSnapshot = previousSnapshots.length > 0 ? previousSnapshots[previousSnapshots.length - 1] : null;
 
-    setIsGeneratingTwin(true);
-
-    try {
-      // 3. AI synthesis with anonymization adapter
-      const generated = await generateRelationshipTwin(targetContact, allForContact, latestPrevSnapshot);
-      const newSnapshot = {
-        id: `twin-snap-${Date.now()}`,
-        contactId: newCheckIn.contactId,
-        checkInId: newCheckIn.id,
-        date: newCheckIn.date,
-        weekLabel: `Check-in ${previousSnapshots.length + 1}`,
-        ...generated
-      };
-
-      saveTwinSnapshot(newCheckIn.contactId, newSnapshot);
-      refreshData();
-      setSelectedContactId(newCheckIn.contactId);
-    } catch (err) {
-      console.error('Failed to generate relationship twin snapshot:', err);
-    } finally {
-      setIsGeneratingTwin(false);
-    }
+    await triggerTwinGeneration(targetContact, sortedAll, latestPrevSnapshot);
   };
 
   const handleRegenerateTwin = async (targetContact) => {
@@ -115,29 +139,54 @@ export default function App() {
       return;
     }
 
-    setIsGeneratingTwin(true);
-    try {
-      const existingSnapshots = twinSnapshots[targetContact.id] || [];
-      const prevSnapshot = existingSnapshots.length > 1 ? existingSnapshots[existingSnapshots.length - 2] : null;
-      const generated = await generateRelationshipTwin(targetContact, contactCheckIns, prevSnapshot);
+    const existingSnapshots = twinSnapshots[targetContact.id] || [];
+    const prevSnapshot = existingSnapshots.length > 1 ? existingSnapshots[existingSnapshots.length - 2] : null;
 
-      const latestCheckIn = contactCheckIns[contactCheckIns.length - 1];
-      const newSnapshot = {
-        id: `twin-snap-${Date.now()}`,
-        contactId: targetContact.id,
-        checkInId: latestCheckIn?.id || '',
-        date: latestCheckIn?.date || new Date().toISOString().split('T')[0],
-        weekLabel: `Reflection (${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`,
-        ...generated
-      };
+    await triggerTwinGeneration(targetContact, contactCheckIns, prevSnapshot);
+  };
 
-      saveTwinSnapshot(targetContact.id, newSnapshot);
-      refreshData();
-    } catch (err) {
-      console.error('Failed to regenerate twin:', err);
-    } finally {
-      setIsGeneratingTwin(false);
+  const handleEditCheckIn = (checkInItem) => {
+    setEditingCheckIn(checkInItem);
+    const contact = contacts.find(c => c.id === checkInItem.contactId) || selectedContact;
+    setCheckInContact(contact);
+    setIsCheckInModalOpen(true);
+  };
+
+  const handleDeleteCheckIn = async (checkInId) => {
+    if (!window.confirm('Delete this check-in? The Relationship Twin will be updated.')) {
+      return;
     }
+    deleteStoredCheckIn(checkInId);
+    refreshData();
+
+    if (selectedContact) {
+      const remainingForContact = getStoredCheckIns()
+        .filter(c => c.contactId === selectedContact.id)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      if (remainingForContact.length > 0) {
+        await triggerTwinGeneration(selectedContact, remainingForContact, null);
+      } else {
+        const currentTwins = getStoredTwins();
+        delete currentTwins[selectedContact.id];
+        localStorage.setItem('wiseher_twins_v2', JSON.stringify(currentTwins));
+        refreshData();
+      }
+    }
+  };
+
+  const handleRetryTwinGeneration = () => {
+    if (!generationError) return;
+    const { targetContact, allForContact, latestPrevSnapshot } = generationError;
+    setGenerationError(null);
+    triggerTwinGeneration(targetContact, allForContact, latestPrevSnapshot);
+  };
+
+  const handleConfirmTwinFallback = () => {
+    if (!generationError) return;
+    const { targetContact, allForContact, latestPrevSnapshot } = generationError;
+    setGenerationError(null);
+    triggerTwinGeneration(targetContact, allForContact, latestPrevSnapshot, { forceFallback: true });
   };
 
   const selectedContact = contacts.find((c) => c.id === selectedContactId) || null;
@@ -164,6 +213,7 @@ export default function App() {
           onOpenAddContact={() => setIsContactModalOpen(true)}
           isPhonePreview={isPhonePreview}
           onTogglePhonePreview={() => setIsPhonePreview((prev) => !prev)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
 
         {/* Main Content Area */}
@@ -175,9 +225,12 @@ export default function App() {
               twinSnapshots={activeTwinSnapshots}
               onBack={() => setSelectedContactId(null)}
               onOpenNewCheckIn={() => {
+                setEditingCheckIn(null);
                 setCheckInContact(selectedContact);
                 setIsCheckInModalOpen(true);
               }}
+              onEditCheckIn={handleEditCheckIn}
+              onDeleteCheckIn={handleDeleteCheckIn}
               onRegenerate={handleRegenerateTwin}
               isRegenerating={isGeneratingTwin}
             />
@@ -186,6 +239,7 @@ export default function App() {
               contacts={contacts}
               checkIns={checkIns}
               twinSnapshots={twinSnapshots}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           ) : activeMainTab === 'safety' ? (
             <DateSafetyCheck />
@@ -197,9 +251,11 @@ export default function App() {
               onSelectContact={(contact) => setSelectedContactId(contact.id)}
               onOpenAddContact={() => setIsContactModalOpen(true)}
               onOpenQuickCheckIn={(contact) => {
+                setEditingCheckIn(null);
                 setCheckInContact(contact || (contacts[0] || null));
                 setIsCheckInModalOpen(true);
               }}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           )}
         </main>
@@ -260,17 +316,85 @@ export default function App() {
         onSave={handleSaveContact}
       />
 
-      {/* Guided Check-In Modal */}
+      {/* Guided Check-In Modal (handles new and edit) */}
       <CheckInModal
         isOpen={isCheckInModalOpen}
         onClose={() => {
           setIsCheckInModalOpen(false);
           setCheckInContact(null);
+          setEditingCheckIn(null);
         }}
         contacts={contacts}
         selectedContact={checkInContact}
+        initialCheckIn={editingCheckIn}
         onSaveCheckIn={handleSaveCheckIn}
       />
+
+      {/* Production Key Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onKeyUpdated={() => refreshData()}
+      />
+
+      {/* Gemini AI Generation Failure Modal with explicit Fallback Confirmation */}
+      {generationError && (
+        <div className="fixed inset-0 z-50 bg-sand-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-sand-200 rounded-3xl p-6 shadow-2xl max-w-sm w-full space-y-4 animate-fadeIn">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-amber-100 rounded-2xl text-amber-700 shrink-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-serif font-bold text-base text-sand-900">
+                  AI Generation Failed
+                </h4>
+                <p className="text-xs text-sand-600 mt-1 leading-relaxed">
+                  {generationError.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-sand-50 rounded-2xl text-[11px] text-sand-600 border border-sand-200/60 leading-relaxed">
+              You can retry Gemini, enter an API key in Settings, or confirm using the offline rule-based fallback. A fallback is completely transparent and never presents as AI output.
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={handleRetryTwinGeneration}
+                className="w-full py-2.5 px-4 bg-terracotta-600 hover:bg-terracotta-700 text-white rounded-xl text-xs font-semibold shadow-sm transition flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Retry with Gemini</span>
+              </button>
+
+              <button
+                onClick={handleConfirmTwinFallback}
+                className="w-full py-2.5 px-4 bg-white hover:bg-sand-50 text-sand-800 border border-sand-300 rounded-xl text-xs font-semibold shadow-2xs transition flex items-center justify-center gap-1.5"
+              >
+                <Wrench className="w-3.5 h-3.5 text-sand-500" />
+                <span>Use Offline Fallback (Rule-based)</span>
+              </button>
+
+              <div className="flex items-center justify-between pt-1 text-xs">
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="text-terracotta-700 hover:text-terracotta-800 font-medium underline flex items-center gap-1"
+                >
+                  <Key className="w-3 h-3" />
+                  <span>Configure API Key</span>
+                </button>
+                <button
+                  onClick={() => setGenerationError(null)}
+                  className="text-sand-500 hover:text-sand-700"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Generating Twin Overlay */}
       {isGeneratingTwin && (

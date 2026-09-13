@@ -6,15 +6,30 @@
 import { anonymize, deanonymize } from './anonymizer';
 import { evaluateSafety } from './safety';
 
-const getApiKey = () => {
+export const GEMINI_MODEL = 'gemini-3.6-flash';
+export const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+
+export const getApiKey = () => {
   if (typeof window !== 'undefined' && localStorage.getItem('wiseher_gemini_key')) {
     return localStorage.getItem('wiseher_gemini_key');
   }
   return import.meta.env.VITE_GEMINI_API_KEY || '';
 };
 
-const GEMINI_MODEL = 'gemini-3.6-flash';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+export const setApiKey = (key) => {
+  if (typeof window !== 'undefined') {
+    if (key && key.trim()) {
+      localStorage.setItem('wiseher_gemini_key', key.trim());
+    } else {
+      localStorage.removeItem('wiseher_gemini_key');
+    }
+  }
+};
+
+export const hasApiKey = () => {
+  const k = getApiKey();
+  return Boolean(k && k.trim());
+};
 
 // Strict JSON schema matching the specifications
 const RELATIONSHIP_TWIN_SCHEMA = {
@@ -60,7 +75,7 @@ const RELATIONSHIP_TWIN_SCHEMA = {
  * @param {Object|null} previousSnapshot - The preceding twin snapshot for comparison
  * @returns {Promise<Object>}
  */
-export async function generateRelationshipTwin(contact, allCheckIns, previousSnapshot = null) {
+export async function generateRelationshipTwin(contact, allCheckIns, previousSnapshot = null, options = {}) {
   // Safety First: If indicators of violence, threats, or coercive control exist, halt analysis
   const safetyCheck = evaluateSafety(allCheckIns);
   if (safetyCheck.isTriggered) {
@@ -77,7 +92,10 @@ export async function generateRelationshipTwin(contact, allCheckIns, previousSna
       nextStep: 'Please reach out to the 116 016 helpline or a trusted professional.',
       next_step: 'Please reach out to the 116 016 helpline or a trusted professional.',
       isSafetyTriggered: true,
-      safetyCheck
+      safetyCheck,
+      isAIGenerated: false,
+      model: null,
+      generatorSource: 'Offline fallback (rule-based)'
     };
   }
 
@@ -103,24 +121,31 @@ ${previousSnapshot ? `Headline: ${previousSnapshot.headline}\nObservations: ${(p
   // 1. PRIVACY ANONYMIZATION BEFORE AI
   const { text: anonymizedContent, mapping } = await anonymize(rawPromptContent, [contact.nickname]);
 
-  // If Gemini API Key is available, call the Gemini API with retry logic
-  const apiKey = getApiKey();
-  if (apiKey && apiKey.trim() !== '') {
-    let lastError = null;
+  // If explicit offline fallback is requested:
+  if (options.forceFallback) {
+    return generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mapping);
+  }
 
-    // Up to 2 attempts (one retry on invalid JSON or network failure)
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  {
-                    text: `You are WiseHer, an empathetic, empowering relationship reflection coach for women.
+  const apiKey = getApiKey();
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('No Gemini API key configured. Enter your key in Settings or choose offline fallback.');
+  }
+
+  let lastError = null;
+
+  // Up to 2 attempts (one retry on invalid JSON or network failure)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `You are WiseHer, an empathetic, empowering relationship reflection coach for women.
 Tagline: "Know your patterns, trust your perception."
 Goal: Synthesize all check-ins into a living "Relationship Twin" profile and detect communication patterns without self-gaslighting.
 
@@ -143,72 +168,67 @@ STRICT COACHING RULES:
 
 Input check-in history to analyze:
 ${anonymizedContent}`
-                  }
-                ]
-              }
-            ],
-            generationConfig: {
-              responseMimeType: "application/json",
-              responseSchema: RELATIONSHIP_TWIN_SCHEMA,
-              temperature: 0.2
+                }
+              ]
             }
-          })
-        });
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: RELATIONSHIP_TWIN_SCHEMA,
+            temperature: 0.2
+          }
+        })
+      });
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(`Gemini API returned status ${response.status}: ${errData.error?.message || response.statusText}`);
-        }
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(`Gemini API returned status ${response.status}: ${errData.error?.message || response.statusText}`);
+      }
 
-        const data = await response.json();
-        const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      const data = await response.json();
+      const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        if (!candidateText) {
-          throw new Error('No candidate content received from Gemini API');
-        }
+      if (!candidateText) {
+        throw new Error('No candidate content received from Gemini API');
+      }
 
-        const parsed = JSON.parse(candidateText);
+      const parsed = JSON.parse(candidateText);
 
-        // Standardize output shape
-        const standardized = {
-          stage: parsed.tree_stage || parsed.stage || 'budding',
-          tree_stage: parsed.tree_stage || parsed.stage || 'budding',
-          headline: parsed.headline || 'Relationship Reflection',
-          observations: Array.isArray(parsed.observations) ? parsed.observations : [],
-          whatChanged: parsed.what_changed || parsed.whatChanged || 'Interaction logged.',
-          what_changed: parsed.what_changed || parsed.whatChanged || 'Interaction logged.',
-          patterns: {
-            green: Array.isArray(parsed.patterns?.green) ? parsed.patterns.green : [],
-            yellow: Array.isArray(parsed.patterns?.yellow) ? parsed.patterns.yellow : [],
-            red: Array.isArray(parsed.patterns?.red) ? parsed.patterns.red : []
-          },
-          reflectionQuestion: parsed.reflection_question || parsed.reflectionQuestion || '',
-          reflection_question: parsed.reflection_question || parsed.reflectionQuestion || '',
-          nextStep: parsed.next_step || parsed.nextStep || '',
-          next_step: parsed.next_step || parsed.nextStep || '',
-          isAIGenerated: true,
-          generatedAt: new Date().toISOString()
-        };
+      // Standardize output shape
+      const standardized = {
+        stage: parsed.tree_stage || parsed.stage || 'budding',
+        tree_stage: parsed.tree_stage || parsed.stage || 'budding',
+        headline: parsed.headline || 'Relationship Reflection',
+        observations: Array.isArray(parsed.observations) ? parsed.observations : [],
+        whatChanged: parsed.what_changed || parsed.whatChanged || 'Interaction logged.',
+        what_changed: parsed.what_changed || parsed.whatChanged || 'Interaction logged.',
+        patterns: {
+          green: Array.isArray(parsed.patterns?.green) ? parsed.patterns.green : [],
+          yellow: Array.isArray(parsed.patterns?.yellow) ? parsed.patterns.yellow : [],
+          red: Array.isArray(parsed.patterns?.red) ? parsed.patterns.red : []
+        },
+        reflectionQuestion: parsed.reflection_question || parsed.reflectionQuestion || '',
+        reflection_question: parsed.reflection_question || parsed.reflectionQuestion || '',
+        nextStep: parsed.next_step || parsed.nextStep || '',
+        next_step: parsed.next_step || parsed.nextStep || '',
+        isAIGenerated: true,
+        model: GEMINI_MODEL,
+        generatorSource: `Generated by Gemini (${GEMINI_MODEL})`,
+        generatedAt: new Date().toISOString()
+      };
 
-        // 2. PRIVACY DE-ANONYMIZATION BEFORE DISPLAY
-        return deanonymizeSnapshot(standardized, mapping);
-      } catch (err) {
-        lastError = err;
-        console.warn(`Gemini generation attempt ${attempt} failed:`, err.message);
-        if (attempt < 2) {
-          // Brief backoff before retry
-          await new Promise(r => setTimeout(r, 600));
-        }
+      // 2. PRIVACY DE-ANONYMIZATION BEFORE DISPLAY
+      return deanonymizeSnapshot(standardized, mapping);
+    } catch (err) {
+      lastError = err;
+      console.warn(`Gemini generation attempt ${attempt} failed:`, err.message);
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 600));
       }
     }
-
-    console.error('All Gemini API attempts failed. Falling back gracefully to local engine:', lastError);
   }
 
-  // Fallback: Client-side intelligent reflection generator (works without API key or when offline)
-  const fallback = generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mapping);
-  fallback.apiError = 'Gemini API was temporarily unreachable. Showing local grounded reflection.';
-  return fallback;
+  throw new Error(`Gemini API analysis failed: ${lastError?.message || 'Connection error'}.`);
 }
 
 /**
@@ -351,7 +371,7 @@ export const GARDEN_COACH_SCHEMA = {
 /**
  * Multi-contact holistic synthesis for Coach Constanze
  */
-export async function generateGardenCoachSynthesis(contacts, checkIns, twinSnapshots) {
+export async function generateGardenCoachSynthesis(contacts, checkIns, twinSnapshots, options = {}) {
   const allNames = contacts.map(c => c.nickname).filter(Boolean);
 
   let multiContactSummary = '';
@@ -392,47 +412,69 @@ ${multiContactSummary}
   // 1. Anonymize before AI call
   const { text: anonymizedPrompt, mapping } = await anonymize(rawPrompt, allNames);
 
-  const apiKey = getApiKey();
-  if (apiKey && apiKey.trim() !== '') {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: anonymizedPrompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              responseMimeType: "application/json",
-              responseSchema: GARDEN_COACH_SCHEMA
-            }
-          })
-        });
+  if (options.forceFallback) {
+    return getFallbackGardenCoach(contacts, checkIns, twinSnapshots, mapping);
+  }
 
-        if (response.ok) {
-          const data = await response.json();
-          const candidate = data.candidates?.[0];
-          const text = candidate?.content?.parts?.[0]?.text;
-          if (text) {
-            const parsed = JSON.parse(text);
-            return {
-              summary_headline: deanonymize(parsed.summary_headline || '', mapping),
-              cross_relationship_patterns: (parsed.cross_relationship_patterns || []).map(p => deanonymize(p, mapping)),
-              strengths: (parsed.strengths || []).map(s => deanonymize(s, mapping)),
-              practice_area: deanonymize(parsed.practice_area || '', mapping),
-              nvc_template: deanonymize(parsed.nvc_template || '', mapping),
-              generatedAt: new Date().toISOString(),
-              isAIGenerated: true
-            };
+  const apiKey = getApiKey();
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('No Gemini API key configured. Enter your key in Settings or choose offline fallback.');
+  }
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: anonymizedPrompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json",
+            responseSchema: GARDEN_COACH_SCHEMA
           }
-        }
-      } catch (err) {
-        console.warn(`Garden Coach synthesis attempt ${attempt} failed:`, err);
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(`Gemini API returned status ${response.status}: ${errData.error?.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      const candidate = data.candidates?.[0];
+      const text = candidate?.content?.parts?.[0]?.text;
+      if (text) {
+        const parsed = JSON.parse(text);
+        return {
+          summary_headline: deanonymize(parsed.summary_headline || '', mapping),
+          cross_relationship_patterns: (parsed.cross_relationship_patterns || []).map(p => deanonymize(p, mapping)),
+          strengths: (parsed.strengths || []).map(s => deanonymize(s, mapping)),
+          practice_area: deanonymize(parsed.practice_area || '', mapping),
+          nvc_template: deanonymize(parsed.nvc_template || '', mapping),
+          generatedAt: new Date().toISOString(),
+          isAIGenerated: true,
+          model: GEMINI_MODEL,
+          generatorSource: `Generated by Gemini (${GEMINI_MODEL})`
+        };
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`Garden Coach synthesis attempt ${attempt} failed:`, err);
+      if (attempt < 2) {
+        await new Promise(r => setTimeout(r, 600));
       }
     }
   }
 
-  // 2. Grounded Fallback if offline or no key
+  throw new Error(`Coach Constanze Gemini analysis failed: ${lastError?.message || 'Connection error'}.`);
+}
+
+/**
+ * Fallback synthesis for Coach Constanze (offline rule-based)
+ */
+export function getFallbackGardenCoach(contacts = [], checkIns = [], twinSnapshots = {}, mapping = {}) {
   return {
     summary_headline: "You hold a deep capacity for self-reflection and steady discernment.",
     cross_relationship_patterns: [
@@ -447,6 +489,8 @@ ${multiContactSummary}
     practice_area: "Voicing your comfort level and boundary in real-time during the first occurrence of inconsistency, rather than absorbing the uncertainty alone.",
     nvc_template: "When plans are changed at the last minute without a clear alternative, I feel unsettled because I need reliability and shared consideration in our time together. Would you be willing to give me a few hours advance notice if your schedule shifts?",
     generatedAt: new Date().toISOString(),
-    isAIGenerated: false
+    isAIGenerated: false,
+    model: null,
+    generatorSource: 'Offline fallback (rule-based)'
   };
 }

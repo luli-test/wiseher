@@ -80,6 +80,31 @@ export function saveStoredCheckIn(newCheckIn) {
   }
 }
 
+export function updateStoredCheckIn(updatedCheckIn) {
+  try {
+    const all = getStoredCheckIns();
+    const updated = all.map(c => c.id === updatedCheckIn.id ? updatedCheckIn : c);
+    localStorage.setItem(KEYS.CHECKINS, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error('Failed to update check-in:', e);
+    return [];
+  }
+}
+
+export function deleteStoredCheckIn(checkInId) {
+  try {
+    const all = getStoredCheckIns();
+    const updated = all.filter(c => c.id !== checkInId);
+    localStorage.setItem(KEYS.CHECKINS, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    console.error('Failed to delete check-in:', e);
+    return [];
+  }
+}
+
+
 // Relationship Twin Snapshots
 export function getStoredTwins() {
   try {

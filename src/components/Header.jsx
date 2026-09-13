@@ -1,5 +1,6 @@
 import React from 'react';
-import { RotateCcw, Smartphone, Monitor, Plus, HeartHandshake } from 'lucide-react';
+import { RotateCcw, Smartphone, Monitor, Plus, HeartHandshake, Settings, Key } from 'lucide-react';
+import { hasApiKey } from '../services/gemini';
 
 import LeafSprig from './LeafSprig';
 
@@ -10,7 +11,8 @@ export default function Header({
   onResetDemo,
   onOpenAddContact,
   isPhonePreview,
-  onTogglePhonePreview
+  onTogglePhonePreview,
+  onOpenSettings
 }) {
   return (
     <header className="border-b border-sand-200/90 bg-sand-50/90 backdrop-blur-md sticky top-0 z-30 px-4 py-3">
@@ -38,6 +40,23 @@ export default function Header({
           >
             {isPhonePreview ? <Monitor className="w-3.5 h-3.5" /> : <Smartphone className="w-3.5 h-3.5" />}
             <span>{isPhonePreview ? 'Full View' : 'Phone View'}</span>
+          </button>
+
+          {/* Settings / API Key Button */}
+          <button
+            onClick={onOpenSettings}
+            className={`relative inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-xl transition ${
+              hasApiKey()
+                ? 'text-sand-600 hover:text-sand-900 bg-sand-200/60 hover:bg-sand-200'
+                : 'text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 font-semibold'
+            }`}
+            title="Configure Gemini API Key"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">{hasApiKey() ? 'Settings' : 'Set Key'}</span>
+            {!hasApiKey() && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 absolute -top-0.5 -right-0.5 animate-pulse" />
+            )}
           </button>
 
           {/* Reset Demo button */}

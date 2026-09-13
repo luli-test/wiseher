@@ -1,8 +1,9 @@
 import React from 'react';
-import { Plus, Sparkles, ChevronRight, Calendar, Info } from 'lucide-react';
+import { Plus, Sparkles, ChevronRight, Calendar, Info, Key } from 'lucide-react';
 import TreeVisualizer from './TreeVisualizer';
 import LeafSprig from './LeafSprig';
 import { INTENTS, getStreakInfo, TREE_STAGES } from '../constants';
+import { hasApiKey } from '../services/gemini';
 
 /**
  * GardenView: Overview showing one tree card per contact.
@@ -14,7 +15,8 @@ export default function GardenView({
   twinSnapshots = {},
   onSelectContact,
   onOpenAddContact,
-  onOpenQuickCheckIn
+  onOpenQuickCheckIn,
+  onOpenSettings
 }) {
   return (
     <div className="space-y-5 pb-20 animate-fadeIn">
@@ -36,6 +38,31 @@ export default function GardenView({
           <span>Add Person</span>
         </button>
       </div>
+
+      {/* Production Key Hint if no key set */}
+      {!hasApiKey() && (
+        <div className="bg-amber-50/90 border border-amber-200/90 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs text-amber-900">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-amber-100 rounded-lg text-amber-700 shrink-0">
+              <Key className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-semibold">Gemini AI key not configured</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Add your Gemini API key in Settings to activate live AI synthesis.
+              </p>
+            </div>
+          </div>
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shrink-0 transition"
+            >
+              Add Key
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Cards List / Grid */}
       {contacts.length === 0 ? (
