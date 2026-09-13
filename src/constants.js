@@ -66,13 +66,15 @@ export const TREE_STAGES = {
 
 /**
  * Calculates escalating streak emoji based on check-in count and cadence
+ * Uses non-plant symbols (coffee -> speech bubble -> fire -> lightning -> gem)
+ * so relationship quality (tree) and frequency (streak) remain visually distinct.
  */
 export function getStreakInfo(checkIns = []) {
   const count = checkIns.length;
-  if (count === 0) return { emoji: '🌱', label: 'New sprout', count: 0 };
-  if (count === 1) return { emoji: '🌱', label: 'First check-in', count: 1 };
-  if (count === 2) return { emoji: '🌿', label: '2 check-ins', count: 2 };
-  if (count === 3) return { emoji: '🪴', label: '3 check-ins', count: 3 };
-  if (count <= 5) return { emoji: '🌳', label: `${count} check-ins streak`, count };
-  return { emoji: '🌳🔥', label: `${count} check-ins steady streak`, count };
+  if (count === 0) return { emoji: '☕', label: 'Starting out', count: 0 };
+  if (count === 1) return { emoji: '☕', label: '1 check-in', count: 1 };
+  if (count === 2) return { emoji: '💬', label: '2 check-ins', count: 2 };
+  if (count === 3) return { emoji: '🔥', label: '3 check-ins streak', count: 3 };
+  if (count <= 5) return { emoji: '⚡', label: `${count} check-ins dynamic streak`, count };
+  return { emoji: '💎', label: `${count} check-ins steady streak`, count };
 }

@@ -4,10 +4,10 @@
 import { DEMO_CONTACT, DEMO_CHECKINS, DEMO_TWIN_SNAPSHOTS } from '../data/demoData';
 
 const KEYS = {
-  CONTACTS: 'wiseher_contacts_v1',
-  CHECKINS: 'wiseher_checkins_v1',
-  TWINS: 'wiseher_twins_v1',
-  INIT_FLAG: 'wiseher_initialized_v1'
+  CONTACTS: 'wiseher_contacts_v2',
+  CHECKINS: 'wiseher_checkins_v2',
+  TWINS: 'wiseher_twins_v2',
+  INIT_FLAG: 'wiseher_initialized_v2'
 };
 
 /**
