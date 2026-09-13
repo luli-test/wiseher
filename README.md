@@ -1,209 +1,139 @@
 # WiseHer 🌿
 > *"Know your patterns, trust your perception."*
 
-WiseHer is a single-page, privacy-first web application designed as a relationship reflection coach for women. It helps users capture grounded check-ins after meetings or chats, observe communication patterns over time without self-gaslighting, and visualize relationship health through an organic "tree in the garden" model.
+**WiseHer** is a single-page, privacy-first web application designed as an empowering relationship reflection coach for women. Built mobile-first for phone browsers, WiseHer helps women record grounded post-meeting check-ins, observe behavioral patterns over time without self-gaslighting, and cultivate confidence in their intuition through an organic "living garden" model.
 
 ---
 
-## 🌐 Live Demo & Deployment
-- **Live URL**: [https://luli-test.github.io/wiseher/](https://luli-test.github.io/wiseher/)
-- **Hosting**: Deployed via GitHub Pages (SPA static routing with universal base path; fallback from GCP project `aiwomen26ham-4435` Firebase Hosting due to 403 caller permissions).
+## 🌐 Live Demo & Repository
+- **Live Application**: [https://luli-test.github.io/wiseher/](https://luli-test.github.io/wiseher/)
+- **GitHub Repository**: [https://github.com/luli-test/wiseher](https://github.com/luli-test/wiseher)
+- **Deployment Strategy**: Automated client-side bundle deployment to GitHub Pages (with Firebase Hosting pre-configured for Google Cloud project `aiwomen26ham-4435`).
 
 ---
 
-## Table of Contents
-1. [What WiseHer Does](#what-wiseher-does)
-2. [Key Features & Flow](#key-features--flow)
-3. [Privacy & Anonymization Architecture](#privacy--anonymization-architecture)
-4. [Tools & Tech Stack](#tools--tech-stack)
-5. [Getting Started & Adding API Keys](#getting-started--adding-api-keys)
-6. [Demo Dataset (8-Week Trajectory)](#demo-dataset-8-week-trajectory)
-7. [Codebase Structure for Beginners](#codebase-structure-for-beginners)
-8. [Safety & German Helpline 116 016](#safety--german-helpline-116-016)
+## 1. What WiseHer Does & Who It Is For
+
+Early in dating or friendships, women frequently experience self-doubt and second-guessing ("Am I overreacting?", "Did they really mean it like that?", "Maybe they're just busy"). Subtle red flags and communication cycles often get lost in emotional fog.
+
+**WiseHer provides a calm, safe sanctuary to:**
+1. **Anchor the Facts**: Capture what actually happened right after a date or conversation (via text or voice-to-text) while memories and bodily sensations are fresh.
+2. **Clarify Intent**: Set explicit relational intentions upfront (`dating`, `friendship`, `unsure`, or `distance`) to evaluate whether the interaction aligns with personal boundaries.
+3. **Visualize Relationship Health**: Track each person as a living tree in your personal garden—evolving organically across 5 stages (`bare`, `budding`, `leafy`, `blooming`, `flourishing`) based on consistency, reciprocity, and respect.
+4. **Learn Cross-Relationship Habits**: Receive holistic synthesis from **Coach Constanze** to identify personal habits and needs across all connections.
+5. **Stay Physically Safe**: Launch a **Date Safety Check** with an automated countdown, GPS coordinate generation, and one-tap WhatsApp / SMS / Call dispatch.
 
 ---
 
-## 1. What WiseHer Does
+## 2. Architecture & Flow
 
-Early in dating or friendships, it is common to question one's own perception ("Am I overreacting?", "Did they really mean it like that?"). WiseHer provides a safe, grounded space to:
-- Document what actually happened while it is fresh.
-- Track communication patterns over weeks and months.
-- Watch a visual reflection of relationship quality that evolves organically as check-ins are added.
-- Receive supportive, non-judgmental coaching observations phrased strictly as *"can be a sign of"*, never as harsh verdicts.
-
----
-
-## 2. Key Features & Flow
-
-### 1. Contacts & Intent
-Add a person with **nickname only** (for privacy) and declare your explicit intent:
-- **Friendship** (`friendship`): Nurturing mutual care and companionship.
-- **Dating** (`dating`): Exploring romantic compatibility.
-- **Unsure** (`unsure`): Observing dynamics to clarify feelings.
-- **Distance** (`distance`): Preserving energy and emotional boundaries.
-
-### 2. Guided Check-In (Text or Voice)
-After every meeting, call, or chat, answer four quick coaching questions:
-1. **What happened?** (Objective description of events)
-2. **How did I feel during and after, plus a 1–5 rating?** (Emotional state & rating)
-3. **What did they do or say that stood out, positive or negative?** (Key quotes or behaviors)
-4. **Who initiated, and how did they communicate?** (Tone, response time, reliability)
-
-*Voice Dictation:* Uses the browser's built-in **Web Speech API** to transcribe your voice directly into text. Audio is **never recorded or stored**.
-
-### 3. The Relationship Twin (Living Profile)
-Whenever a new check-in is logged, WiseHer regenerates a living profile synthesized from **all** check-ins up to that date:
-- 3 to 5 observations, each linked directly to its check-in date (`[Check-in: Oct 10]`).
-- A **"What changed since last time"** line comparing the interaction to prior baseline.
-- Full snapshot history preserved across time.
-
-### 4. The Timeline Scrubber (The Heart of the App)
-An interactive timeline slider allows you to scrub back and forth through the weeks to see how your perception and the person's communication evolved (e.g., Week 1 *"Polite"* $\to$ Week 3 *"Very attentive"* $\to$ Week 5 *"Mostly reaches out when he needs something"* $\to$ Week 8 *"Recurring pattern visible"*).
-
-### 5. Green / Yellow / Red Pattern Signals
-- **🟢 Green Signals**: Evidence of mutual respect, active listening, and reliability.
-- **🟡 Yellow Signals**: Ambivalence, sudden pace acceleration, or fluctuating priority.
-- **🔴 Red Signals**: Disrespect, hot-and-cold withdrawal, emotional invalidation, or boundary strain.
-- **Rule**: Every signal is phrased strictly as *"can be a sign of"*, never as a diagnosis.
-- Includes one empowering **reflection question** and one practical **next step** aligned with your stated intent.
-
-### 6. The Tree Garden & Escalating Streak
-- **Zero human faces or avatars anywhere.**
-- Each contact is represented as an organic tree in your garden.
-- **Tree Stages** reflect relationship quality:
-  1. `bare` (dormancy, strain, recurring boundary issues)
-  2. `budding` (early tender growth, new exploration)
-  3. `leafy` (balanced, steady communication)
-  4. `blooming` (warmth, mutual investment, shared affection)
-  5. `flourishing` (blooming with birds & fluttering butterflies; exceptional mutual safety & joy)
-- **Escalating Emoji Streak**: Tracks contact frequency and duration (🌱 $\to$ 🌿 $\to$ 🪴 $\to$ 🌳 $\to$ 🌳🔥) separately from quality.
+```mermaid
+flowchart TD
+    User([User on Mobile Browser]) -->|1. Set Intent & Nickname| Contact[Contact Added]
+    User -->|2. Check-In: Text or Voice Speech API| RawCheckIn[Post-Meeting Check-In]
+    
+    RawCheckIn --> SafetyCheck{Safety Threat Trigger?}
+    SafetyCheck -->|Yes: Coercive Control / Threats| SafetyAlert[🚨 116 016 Helpline Modal\nHalts AI Processing]
+    
+    SafetyCheck -->|No| Anonymizer[Client-Side Anonymizer\nReplaces Nicknames & PII]
+    Anonymizer -->|Anonymized Prompt| GeminiFlash[Gemini 3.6 Flash API\nStructured JSON Schema\nTemp 0.2]
+    
+    GeminiFlash -->|Strict JSON| Deanonymizer[Client-Side De-anonymizer\nRestores Nicknames]
+    Deanonymizer -->|Living Profile Snapshot| RelTwin[Relationship Twin & Garden Tree]
+    
+    RelTwin --> AllTwins[All Contacts Summary]
+    AllTwins --> CoachConstanze[🌱 Garden Coach Constanze\nCross-Relationship Patterns & NVC]
+    
+    User -->|Share Button| AnonymizedShare[📋 Anonymized Summary to Clipboard\nSafe for Friends & Therapists]
+    User -->|Pre-Date Prep| DateSafety[🛡️ Date Safety Check\nTimer + GPS + WhatsApp/SMS/Call]
+```
 
 ---
 
-## 3. Privacy & Anonymization Architecture
+## 3. Honest System Disclosure: What is AI, Rule-Based, and Pre-computed Demo Data
 
-WiseHer was built with privacy as the core foundation:
-1. **100% Client-Side**: All contacts, check-ins, and snapshots reside exclusively in `localStorage` in your device's browser. No backend server, no cloud database.
-2. **Anonymization Adapter (`src/services/anonymizer.js`)**:
-   - Before any text is submitted to the Gemini API, it runs through `anonymize(text)`.
-   - Names, locations, and dates are converted into tokens (`[PERSON_1]`, `[PLACE_1]`, `[DATE_1]`).
-   - If an optional `VITE_ANYMIZE_API_KEY` is provided, it calls the Anymize API; otherwise, it uses the built-in local rule-based entity anonymizer.
-   - Once Gemini responds, `deanonymize(text, mapping)` restores the text before displaying it in your browser.
-   - A reassuring **"🔒 Anonymized before AI"** badge is shown.
+We believe in complete transparency about how intelligence is generated in WiseHer:
 
----
-
-## 4. Tools & Tech Stack
-
-- **React 18** + **Vite 6**: Fast, lightweight single-page application framework.
-- **Tailwind CSS**: Warm, calming color palette (`sand`, `terracotta`, `sage`).
-- **Lucide React**: Clean, accessible UI icons.
-- **Browser Web Speech API**: Native client-side voice-to-text dictation.
-- **Google Gemini API** (`gemini-2.5-flash`): Structured coaching analysis and pattern synthesis.
-- **LocalStorage API**: Zero-cloud data persistence.
+| Feature Component | Implementation Type | Description |
+| :--- | :--- | :--- |
+| **Relationship Twin Analysis** | **Real AI (`gemini-3.6-flash`)** | Live multimodal LLM inference with strict JSON schema enforcing: tree stage (`bare` to `flourishing`), date-linked observations, "what changed", green/yellow/red patterns phrased strictly as *"can be a sign of"*, reflection questions, and intent-aligned next steps. |
+| **Garden Coach (Constanze)** | **Real AI (`gemini-3.6-flash`)** | One holistic LLM call synthesizing anonymized twins across all contacts: reveals cross-relationship habits and needs, highlights 3 strengths, 1 practice area, and generates an actionable Nonviolent Communication (NVC) template. |
+| **Data Anonymization Engine** | **Rule-based & Regex** | Pre-flight masking that strips personal names, nicknames, email addresses, phone numbers, and dates into tokens (`[PERSON_1]`, etc.) before any payload leaves the device. |
+| **Emergency Safety Trigger** | **Rule-based** | High-urgency heuristic regex scanning for domestic violence, physical intimidation, or threats. Bypasses LLM analysis immediately to display the German Helpline `116 016` banner. |
+| **Streak & Frequency Badges** | **Rule-based** | Interaction frequency calculations displaying distinct non-plant badges (`☕`, `💬`, `🔥`, `⚡`, `💎`) to clearly separate cadence from relationship health. |
+| **Date Safety Check** | **Client-side Browser APIs** | Real-time `setInterval` countdown clock, HTML5 Geolocation API (`navigator.geolocation`) coordinate lookup, and OS scheme launchers (`wa.me:`, `sms:`, `tel:`). |
+| **Local Offline Fallback** | **Rule-based Deterministic** | Fallback reflection generator ensuring the app functions smoothly even without internet connectivity or an API key. |
+| **8-Week Baseline Trajectory** | **Pre-computed Demo Data** | Curated 6-entry timeline ending on 2026-09-12 with contact "Alex", showcasing a realistic trajectory from charming consistency to subtle withdrawal and eventual gaslighting. |
 
 ---
 
-## 5. Getting Started & Adding API Keys
+## 4. Privacy & Safety Design
+
+WiseHer was built with a strict **Local-First, Privacy-by-Design** philosophy:
+- **Zero Cloud Storage**: All contacts, check-ins, reflections, and safety settings live solely in browser `localStorage`. No user accounts, cookies, or remote databases.
+- **Nicknames Only**: Contact entries encourage single nicknames or initials rather than full legal names.
+- **Client-Side Voice Processing**: Voice check-ins use the browser's native Web Speech API (`webkitSpeechRecognition`). Speech is converted to text locally; audio files are **never recorded or uploaded**.
+- **Double-Layer Anonymization**: All prompts sent to Gemini are anonymized client-side. Returned JSON is de-anonymized in memory immediately before UI rendering.
+- **Share Anonymized Summary**: Tapping "Share Anonymized" on any twin snapshot copies a strictly masked report (`[PERSON_1]`) to the clipboard, empowering users to consult a friend or therapist without leaking identities.
+- **German Violence Against Women Helpline (116 016)**: Direct, confidential support integration with one-tap dialing and multi-language support.
+- **Clear Limitations**: The UI explicitly informs users that the Date Safety Check operates client-side and requires a device tap to trigger messages (with automated server-side SMS planned for future iterations).
+
+---
+
+## 5. Tools & Technologies Used
+
+- **Google Antigravity**: Agentic workflow automation, task execution, testing, and Git operations.
+- **Gemini API (`gemini-3.6-flash`)**: High-speed, structured JSON schema outputs (`responseSchema`) with low temperature (`0.2`) for reproducible, grounded coaching insights.
+- **React 18 & Vite**: Lightning-fast, mobile-first responsive single-page web architecture.
+- **Tailwind CSS**: Custom, soothing earthy color palette (`sand`, `sage`, `terracotta`, `warmamber`) curated to reduce anxiety and create an inviting reflection space.
+- **Web Speech API**: In-browser speech-to-text transcription for effortless verbal debriefs.
+- **HTML5 Geolocation API**: Browser GPS retrieval for one-tap emergency location sharing.
+- **Lucide Icons**: Clean, accessible iconography.
+- **Firebase Hosting & GitHub Pages**: Production hosting with SPA routing and relative asset resolution.
+
+---
+
+## 6. How to Run Locally
 
 ### Prerequisites
-- Node.js (v18+ or v20 LTS)
-- npm (v9+)
-- git
+- Node.js LTS (v18+ or v20+)
+- Git
 
-### Installation
+### Installation Steps
 ```bash
-# Clone or navigate to the repository
+# 1. Clone the repository
+git clone https://github.com/luli-test/wiseher.git
 cd wiseher
 
-# Install dependencies
+# 2. Install dependencies
 npm install
 
-# Start the development server
+# 3. Configure environment
+cp .env.example .env
+# Open .env and insert your Gemini API Key:
+# VITE_GEMINI_API_KEY=your_actual_gemini_api_key_here
+# Optional coach video demo:
+# VITE_COACH_VIDEO_URL=https://example.com/coach-video.mp4
+
+# 4. Start local development server
 npm run dev
 ```
 
-### Adding API Keys
-WiseHer works out-of-the-box with a built-in local fallback engine. To connect real AI generation:
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Open `.env` in your text editor:
-   ```env
-   # Obtain your key at: https://aistudio.google.com/
-   VITE_GEMINI_API_KEY=your_gemini_api_key_here
-
-   # Optional: Anymize API Key
-   VITE_ANYMIZE_API_KEY=
-   ```
-3. Restart the dev server (`npm run dev`).
-4. **Security Note**: `.env` is listed in `.gitignore`. **Never commit API keys to git or share them in public chats.**
+Visit `http://localhost:5173` in your browser. (Click the "Phone View" toggle in the header for a mobile frame simulation).
 
 ---
 
-## 6. Demo Dataset (8-Week Trajectory)
+## 7. Future Horizons
 
-To allow immediate exploration, WiseHer comes pre-seeded with an 8-week demo contact:
-- **Contact**: "Alex" (Intent: Dating, labeled `DEMO`).
-- **Check-ins**:
-  - **Week 1 (Oct 10)**: First date, polite conversation, active listening. (`budding` tree)
-  - **Week 2 (Oct 18)**: Dinner date, enthusiastic morning texts. (`leafy` tree)
-  - **Week 3 (Oct 26)**: Cooking dinner, intense romantic declarations. (`blooming` tree)
-  - **Week 4 (Nov 04)**: Last-minute cancellation, 24 hours of silence. (`leafy` tree)
-  - **Week 5 (Nov 14)**: Texts at 11:30 PM asking for a work favor. (`budding` tree)
-  - **Week 8 (Dec 05)**: Defensiveness, calls calm boundaries "dramatic". (`bare` tree with full pattern review)
-
-Click the **"Reset Demo"** button in the header at any time to restore this baseline.
+1. **Dating App Integrations**: Direct partnerships with platforms like Bumble, Hinge, or Tinder to import verified match timestamps and prompt timely check-ins after dates.
+2. **Interactive NVC Roleplay**: Voice-driven conversational practice using Gemini Multimodal Live API to rehearse difficult boundary conversations before having them in real life.
+3. **Cloud Emergency Guardian**: An optional opt-in background service that monitors the safety timer server-side and automatically dispatches SMS/webhook notifications if the user's phone runs out of battery or goes offline.
+4. **Multi-Language Support**: Expanding beyond English and German to include Spanish, French, Arabic, and Turkish.
 
 ---
 
-## 7. Codebase Structure for Beginners
+## 8. Team & Hackathon Submission
 
-```
-wiseher/
-├── .env.example             # Template for API keys
-├── .gitignore               # Ensures .env and node_modules are never committed
-├── index.html               # Main HTML with fonts and mobile viewport
-├── package.json             # Project dependencies and scripts
-├── tailwind.config.js       # Warm, calming design token configuration
-├── src/
-│   ├── main.jsx             # React entrypoint
-│   ├── App.jsx              # Main app controller & modal state
-│   ├── index.css            # Tailwind directives and subtle animations
-│   ├── constants.js         # Tree stages, intents, and streak calculations
-│   ├── data/
-│   │   └── demoData.js      # 6 dated check-ins over 8 weeks & initial snapshots
-│   ├── services/
-│   │   ├── storage.js       # localStorage getter/setter utilities
-│   │   ├── speech.js        # Web Speech API voice dictation helper
-│   │   ├── safety.js        # Detection for threats, violence, and coercive control
-│   │   ├── anonymizer.js    # anonymize() and deanonymize() adapter
-│   │   └── gemini.js        # Gemini API synthesis with coaching prompt rules
-│   └── components/
-│       ├── Header.jsx           # App title, tagline, reset & phone preview toggle
-│       ├── LeafSprig.jsx        # Delicate brand vector sprig icon
-│       ├── GardenView.jsx       # Overview cards with mini trees & streaks
-│       ├── RelationshipTwin.jsx # Living profile & timeline scrubber
-│       ├── TreeVisualizer.jsx   # Organic SVG tree stages (no human avatars)
-│       ├── PatternCheck.jsx     # Green / Yellow / Red communication patterns
-│       ├── CheckInModal.jsx     # 4 coaching questions with voice-to-text
-│       ├── ContactModal.jsx     # Add person & intent
-│       └── SafetyBanner.jsx     # German helpline 116 016 calm banner
-```
+WiseHer was built with care during the **AI Women Hackathon 2026** to empower women to trust their intuition, establish healthy boundaries, and foster emotionally safe relationships.
 
----
-
-## 8. Safety & German Helpline 116 016
-
-Relationship reflection apps must recognize the boundary between communication differences and danger. If any check-in mentions indicators of physical violence, threats, intimidation, stalking, or coercive control, WiseHer **immediately pauses pattern analysis** and displays a supportive, calm emergency banner:
-
-- **Hilfetelefon "Gewalt gegen Frauen" (Germany)**:
-  - **Phone**: `116 016`
-  - **Cost**: Free, anonymous, confidential.
-  - **Availability**: 24/7, 365 days a year.
-  - **Support**: Available in 18 languages, German Sign Language, and via online chat at [hilfetelefon.de](https://www.hilfetelefon.de).
-
----
-
-*Know your patterns, trust your perception.*
+🌿 *"Know your patterns, trust your perception."*
