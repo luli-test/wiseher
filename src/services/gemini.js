@@ -309,3 +309,144 @@ function generateLocalTwinFallback(contact, allCheckIns, previousSnapshot, mappi
 
   return deanonymizeSnapshot(rawSnapshot, mapping);
 }
+
+/**
+ * Garden Coach Constanze: Schema for cross-relationship coaching report card
+ */
+export const GARDEN_COACH_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    summary_headline: {
+      type: "STRING",
+      description: "A calm, grounded 1-sentence headline capturing the user's current relational landscape and inner growth."
+    },
+    cross_relationship_patterns: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "2-4 patterns that repeat across relationships about the user's own habits, responses, and needs. Reflective, compassionate, never a clinical diagnosis or labeling others."
+    },
+    strengths: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "Exactly 3 strengths observed in how the user navigates communication and self-awareness."
+    },
+    practice_area: {
+      type: "STRING",
+      description: "Exactly 1 tangible, gentle skill or mindset to practise in upcoming interactions."
+    },
+    nvc_template: {
+      type: "STRING",
+      description: "One complete Nonviolent-Communication sentence template formatted precisely as: 'When ..., I feel ... because I need ... Would you be willing ...?'"
+    }
+  },
+  required: [
+    "summary_headline",
+    "cross_relationship_patterns",
+    "strengths",
+    "practice_area",
+    "nvc_template"
+  ]
+};
+
+/**
+ * Multi-contact holistic synthesis for Coach Constanze
+ */
+export async function generateGardenCoachSynthesis(contacts, checkIns, twinSnapshots) {
+  const allNames = contacts.map(c => c.nickname).filter(Boolean);
+
+  let multiContactSummary = '';
+  contacts.forEach((contact, idx) => {
+    const contactCheckIns = checkIns.filter(c => c.contactId === contact.id);
+    const snapshots = twinSnapshots[contact.id] || [];
+    const latestSnapshot = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null;
+
+    multiContactSummary += `\n[Contact ${idx + 1}: ${contact.nickname}] (Intent: ${contact.intent}, Total Check-ins: ${contactCheckIns.length})\n`;
+    if (latestSnapshot) {
+      multiContactSummary += `- Tree Stage: ${latestSnapshot.stage || latestSnapshot.tree_stage}\n`;
+      multiContactSummary += `- Headline: ${latestSnapshot.headline}\n`;
+      multiContactSummary += `- Key Observations: ${(latestSnapshot.observations || []).slice(-3).join('; ')}\n`;
+      multiContactSummary += `- Green Patterns: ${(latestSnapshot.patterns?.green || []).join('; ') || 'None identified yet'}\n`;
+      multiContactSummary += `- Yellow Patterns: ${(latestSnapshot.patterns?.yellow || []).join('; ') || 'None identified yet'}\n`;
+      multiContactSummary += `- Red Patterns: ${(latestSnapshot.patterns?.red || []).join('; ') || 'None identified yet'}\n`;
+    } else {
+      multiContactSummary += `- No twin snapshots recorded yet.\n`;
+    }
+  });
+
+  const rawPrompt = `
+You are Constanze, an empathetic, calm, and grounded relationship coach in WiseHer.
+Synthesize the user's relationship garden to identify repeating patterns in HER OWN habits and emotional needs across relationships.
+
+Philosophical Guidelines:
+- Reflective, empowering, never diagnostic (no clinical labels like "narcissist", "bpd", "avoidant personality").
+- Focus on the user's own boundaries, pacing, and core emotional safety.
+- Strengths: Highlight exactly 3 strengths.
+- Practice Area: Exactly 1 gentle practice area for upcoming interactions.
+- Nonviolent Communication (NVC) template: Follow Marshall Rosenberg's format strictly:
+  "When [neutral observable event], I feel [emotion] because I need [underlying need]. Would you be willing to [clear, doable request]?"
+
+Multi-Contact Relationship Garden:
+${multiContactSummary}
+`;
+
+  // 1. Anonymize before AI call
+  const { text: anonymizedPrompt, mapping } = await anonymize(rawPrompt, allNames);
+
+  const apiKey = getApiKey();
+  if (apiKey && apiKey.trim() !== '') {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await fetch(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: anonymizedPrompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: "application/json",
+              responseSchema: GARDEN_COACH_SCHEMA
+            }
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const candidate = data.candidates?.[0];
+          const text = candidate?.content?.parts?.[0]?.text;
+          if (text) {
+            const parsed = JSON.parse(text);
+            return {
+              summary_headline: deanonymize(parsed.summary_headline || '', mapping),
+              cross_relationship_patterns: (parsed.cross_relationship_patterns || []).map(p => deanonymize(p, mapping)),
+              strengths: (parsed.strengths || []).map(s => deanonymize(s, mapping)),
+              practice_area: deanonymize(parsed.practice_area || '', mapping),
+              nvc_template: deanonymize(parsed.nvc_template || '', mapping),
+              generatedAt: new Date().toISOString(),
+              isAIGenerated: true
+            };
+          }
+        }
+      } catch (err) {
+        console.warn(`Garden Coach synthesis attempt ${attempt} failed:`, err);
+      }
+    }
+  }
+
+  // 2. Grounded Fallback if offline or no key
+  return {
+    summary_headline: "You hold a deep capacity for self-reflection and steady discernment.",
+    cross_relationship_patterns: [
+      "You notice subtle shifts in emotional availability early, but you sometimes wait until mixed signals repeat before voicing your boundary.",
+      "In dating connections, you tend to extend the benefit of the doubt during initial charm, which can make sudden inconsistency harder to process."
+    ],
+    strengths: [
+      "Grounded self-honesty: You listen to physical intuition rather than rationalizing away discomfort.",
+      "Clear intentionality: You declare upfront what you desire (friendship, dating, distance).",
+      "Patience and reflection: You document facts and check in with yourself before reacting."
+    ],
+    practice_area: "Voicing your comfort level and boundary in real-time during the first occurrence of inconsistency, rather than absorbing the uncertainty alone.",
+    nvc_template: "When plans are changed at the last minute without a clear alternative, I feel unsettled because I need reliability and shared consideration in our time together. Would you be willing to give me a few hours advance notice if your schedule shifts?",
+    generatedAt: new Date().toISOString(),
+    isAIGenerated: false
+  };
+}

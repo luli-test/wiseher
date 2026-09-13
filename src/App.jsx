@@ -4,6 +4,8 @@ import GardenView from './components/GardenView';
 import RelationshipTwin from './components/RelationshipTwin';
 import ContactModal from './components/ContactModal';
 import CheckInModal from './components/CheckInModal';
+import GardenCoachView from './components/GardenCoachView';
+import DateSafetyCheck from './components/DateSafetyCheck';
 import {
   initializeStorage,
   getStoredContacts,
@@ -15,13 +17,15 @@ import {
   resetToDemo
 } from './services/storage';
 import { generateRelationshipTwin } from './services/gemini';
-import { Sparkles, Lock } from 'lucide-react';
+import { Sparkles, Lock, Trees, Shield, Compass } from 'lucide-react';
+import LeafSprig from './components/LeafSprig';
 
 export default function App() {
   const [contacts, setContacts] = useState([]);
   const [checkIns, setCheckIns] = useState([]);
   const [twinSnapshots, setTwinSnapshots] = useState({});
   const [selectedContactId, setSelectedContactId] = useState(null);
+  const [activeMainTab, setActiveMainTab] = useState('garden'); // 'garden' | 'coach' | 'safety'
 
   // Modals
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
@@ -177,6 +181,14 @@ export default function App() {
               onRegenerate={handleRegenerateTwin}
               isRegenerating={isGeneratingTwin}
             />
+          ) : activeMainTab === 'coach' ? (
+            <GardenCoachView
+              contacts={contacts}
+              checkIns={checkIns}
+              twinSnapshots={twinSnapshots}
+            />
+          ) : activeMainTab === 'safety' ? (
+            <DateSafetyCheck />
           ) : (
             <GardenView
               contacts={contacts}
@@ -191,6 +203,54 @@ export default function App() {
             />
           )}
         </main>
+
+        {/* Docked Bottom Navigation Bar */}
+        <nav className="border-t border-sand-200/90 bg-white/95 backdrop-blur-md px-4 py-2 flex items-center justify-around z-20 shrink-0">
+          <button
+            onClick={() => {
+              setSelectedContactId(null);
+              setActiveMainTab('garden');
+            }}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+              activeMainTab === 'garden' && !selectedContact
+                ? 'text-terracotta-600 font-bold'
+                : 'text-sand-500 hover:text-sand-800'
+            }`}
+          >
+            <LeafSprig size={18} />
+            <span className="text-[11px]">My Garden</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedContactId(null);
+              setActiveMainTab('coach');
+            }}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+              activeMainTab === 'coach' && !selectedContact
+                ? 'text-terracotta-600 font-bold'
+                : 'text-sand-500 hover:text-sand-800'
+            }`}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span className="text-[11px]">Coach Constanze</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedContactId(null);
+              setActiveMainTab('safety');
+            }}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition ${
+              activeMainTab === 'safety' && !selectedContact
+                ? 'text-terracotta-600 font-bold'
+                : 'text-sand-500 hover:text-sand-800'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            <span className="text-[11px]">Date Safety</span>
+          </button>
+        </nav>
       </div>
 
       {/* Add Contact Modal */}

@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Plus, Calendar, Clock, Sparkles, History, ChevronRight, Lock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Calendar, Clock, Sparkles, History, ChevronRight, Lock, RefreshCw, Share2, Check } from 'lucide-react';
 import TreeVisualizer from './TreeVisualizer';
 import PatternCheck from './PatternCheck';
 import SafetyBanner from './SafetyBanner';
 import { INTENTS, getStreakInfo } from '../constants';
 import { evaluateSafety } from '../services/safety';
+import { anonymize } from '../services/anonymizer';
 
 /**
  * RelationshipTwin: The heart of WiseHer.
@@ -37,6 +38,46 @@ export default function RelationshipTwin({
   // Tab view: 'twin' or 'checkins'
   const [activeTab, setActiveTab] = useState('twin');
   const [selectedCheckInForModal, setSelectedCheckInForModal] = useState(null);
+  const [hasCopiedShare, setHasCopiedShare] = useState(false);
+
+  const handleShareAnonymizedSummary = async () => {
+    if (!currentSnapshot) return;
+
+    const green = (currentSnapshot.patterns?.green || []).map(p => `• [Green] ${p}`).join('\n');
+    const yellow = (currentSnapshot.patterns?.yellow || []).map(p => `• [Yellow] ${p}`).join('\n');
+    const red = (currentSnapshot.patterns?.red || []).map(p => `• [Red] ${p}`).join('\n');
+    const obs = (currentSnapshot.observations || []).map(o => `• ${o}`).join('\n');
+
+    const raw = `WiseHer - Relationship Reflection Summary (Anonymized)
+Snapshot Date: ${currentSnapshot.date}
+Intent: ${intentInfo.label}
+Tree Stage: ${currentSnapshot.stage || currentSnapshot.tree_stage}
+
+Snapshot Headline:
+${currentSnapshot.headline}
+
+What Changed Since Last Time:
+${currentSnapshot.whatChanged || currentSnapshot.what_changed || 'Initial check-in baseline.'}
+
+Key Observations:
+${obs || 'None'}
+
+Identified Behavioral Patterns:
+${[green, yellow, red].filter(Boolean).join('\n') || 'None'}
+
+Reflection Question:
+${currentSnapshot.reflectionQuestion || currentSnapshot.reflection_question || 'N/A'}
+
+Next Step Aligned with Intent:
+${currentSnapshot.nextStep || currentSnapshot.next_step || 'N/A'}
+`;
+
+    // Strictly anonymize before copying to clipboard (never de-anonymized)
+    const { text: anonymizedSummary } = await anonymize(raw, [contact.nickname]);
+    await navigator.clipboard.writeText(anonymizedSummary);
+    setHasCopiedShare(true);
+    setTimeout(() => setHasCopiedShare(false), 2500);
+  };
 
   const currentSnapshot = sortedSnapshots[activeSnapshotIndex] || {
     stage: 'budding',
@@ -222,17 +263,38 @@ export default function RelationshipTwin({
                 </h3>
               </div>
 
-              {onRegenerate && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Share anonymized summary button */}
                 <button
-                  onClick={() => onRegenerate(contact)}
-                  disabled={isRegenerating || checkIns.length === 0}
-                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-terracotta-700 bg-terracotta-50 hover:bg-terracotta-100 border border-terracotta-200 px-2.5 py-1.5 rounded-xl transition disabled:opacity-50 shrink-0"
-                  title="Regenerate Relationship Twin using Gemini AI"
+                  onClick={handleShareAnonymizedSummary}
+                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-sand-700 bg-sand-100 hover:bg-sand-200 border border-sand-300 px-2.5 py-1.5 rounded-xl transition active:scale-95"
+                  title="Copy anonymized summary to clipboard to share with a friend or therapist"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                  <span>{isRegenerating ? 'Analyzing...' : 'Regenerate'}</span>
+                  {hasCopiedShare ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-sage-600" />
+                      <span className="text-sage-700">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>Share Anonymized</span>
+                    </>
+                  )}
                 </button>
-              )}
+
+                {onRegenerate && (
+                  <button
+                    onClick={() => onRegenerate(contact)}
+                    disabled={isRegenerating || checkIns.length === 0}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-terracotta-700 bg-terracotta-50 hover:bg-terracotta-100 border border-terracotta-200 px-2.5 py-1.5 rounded-xl transition disabled:opacity-50"
+                    title="Regenerate Relationship Twin using Gemini AI"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+                    <span>{isRegenerating ? 'Analyzing...' : 'Regenerate'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Error notice if fallback occurred */}
